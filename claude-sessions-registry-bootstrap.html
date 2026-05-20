@@ -45,6 +45,8 @@
   <li><a href="#overview">What this is</a></li>
   <li><a href="#prompt">The bootstrap prompt (paste into a fresh Claude Code session)</a></li>
   <li><a href="#ccs">The <code>ccs</code> session manager — full embedded script</a></li>
+  <li><a href="#statusline">Configure the statusline to show the PID</a></li>
+  <li><a href="#first-session">Add your first session (sample prompt)</a></li>
   <li><a href="#registry">Per-project <code>claude-sessions-registry.md</code> template</a></li>
   <li><a href="#usage">Daily usage</a></li>
   <li><a href="#verify">Verification checklist</a></li>
@@ -54,10 +56,11 @@
 <h2 id="overview">1. What this is</h2>
 <div class="card">
 <p>If you run 5+ Claude Code sessions in parallel across projects, the built-in <code>/resume</code> picker becomes unusable — every session looks like a hex ID, and you forget which is which.</p>
-<p><strong>ccs</strong> solves this with three small pieces:</p>
+<p><strong>ccs</strong> solves this with four small pieces:</p>
 <ol>
   <li>A single bash script at <code>~/.local/bin/ccs</code> — the CLI.</li>
   <li>A global registry JSON at <code>~/.claude/named-sessions.json</code> — the source of truth.</li>
+  <li>A statusline script at <code>~/.claude/statusline-ccs.sh</code> — surfaces the Claude Code PID at the bottom of every window, which is what <code>ccs add</code> needs.</li>
   <li>A per-project markdown file at <code>&lt;project&gt;/.claude/claude-sessions-registry.md</code> — auto-created the first time you register a session in that project. The table inside is rewritten by <code>ccs</code> on every change, so you can browse "what sessions exist for this project" right in your repo.</li>
 </ol>
 <p>That's the whole system. No daemons, no databases, no cloud sync. Everything is local files you can read and edit.</p>
@@ -99,27 +102,46 @@ STEPS
 4. INITIALISE AN EMPTY REGISTRY (idempotent — safe to re-run)
      [ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' > ~/.claude/named-sessions.json
 
-5. ENSURE ~/.local/bin IS ON PATH
+5. CONFIGURE THE STATUSLINE TO SHOW THE PID
+   `ccs add` needs the Claude Code PID, which is easiest to read from the
+   statusline at the bottom of the Claude Code window. Save the statusline
+   script from Section 4 of the HTML to ~/.claude/statusline-ccs.sh and
+   chmod +x it. Then patch (or create) ~/.claude/settings.json to set:
+       "statusLine": {
+         "type": "command",
+         "command": "bash ~/.claude/statusline-ccs.sh"
+       }
+   If settings.json already exists, MERGE this key — do not clobber existing
+   keys. Use python3 -c with json.load/dump for the merge. If the user
+   already has a statusLine configured, ASK before overwriting it.
+
+6. ENSURE ~/.local/bin IS ON PATH
    Detect the user's shell rc file (~/.zshrc for zsh, ~/.bashrc for bash) and
    append `export PATH="$HOME/.local/bin:$PATH"` if not already present. Tell
    the user they must open a new terminal (or `source` the file) for ccs to
    resolve on PATH.
 
-6. SMOKE TEST
+7. SMOKE TEST
    Run `~/.local/bin/ccs list` and confirm it prints "No sessions registered".
    If it errors, paste the error and stop.
 
-7. SHOW THE USER HOW TO REGISTER THEIR FIRST SESSION
+8. TELL THE USER WHAT TO DO NEXT
    Print these instructions verbatim:
 
-     The statusline at the bottom of your Claude Code window shows the PID of
-     the current session. From a separate terminal (or with `!` inside Claude
-     Code), register it with a name:
+     RESTART CLAUDE CODE so the new statusline takes effect. After restart,
+     the statusline at the bottom of the window will show something like:
 
-         ccs add my-session <pid>
+         ⊡ <project-name>  pid:54057
 
-     That creates `<current-project>/.claude/claude-sessions-registry.md`
-     automatically if it does not exist, and adds your session to the table.
+     That number after `pid:` is what `ccs add` needs.
+
+     To register the CURRENT Claude Code session you are in, open a separate
+     terminal (or use `!` inside Claude Code) and run:
+
+         ccs add my-session 54057          # substitute your PID
+
+     That command auto-creates `<current-project>/.claude/claude-sessions-registry.md`
+     the first time and adds your session to the table.
 
      Useful commands:
          ccs list            # all named sessions with live/idle status
@@ -659,7 +681,133 @@ source ~/.zshrc
 ccs list   # should print "No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;"</pre>
 </div>
 
-<h2 id="registry">4. The per-project registry — auto-created, no manual step</h2>
+<h2 id="statusline">4. Configure the statusline to show the PID</h2>
+<p>Claude Code lets you define a custom statusline via <code>~/.claude/settings.json</code>. The script below prints <code>⊡ &lt;project&gt;  pid:&lt;claude-pid&gt;</code> at the bottom of every Claude Code window. The PID it shows is exactly what <code>ccs add &lt;name&gt; &lt;pid&gt;</code> expects.</p>
+
+<h3>The statusline script</h3>
+<p>Save this to <code>~/.claude/statusline-ccs.sh</code>, then <code>chmod +x ~/.claude/statusline-ccs.sh</code>.</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="statusline-script">Copy statusline script</button>
+<pre id="statusline-script">#!/usr/bin/env bash
+# Claude Code statusline for ccs.
+# Reads the session JSON Claude Code pipes in on stdin, extracts cwd, and
+# prints "⊡ &lt;project-basename&gt;  pid:&lt;claude-code-pid&gt;".
+# The PID is $PPID — i.e. the Claude Code process that spawned this script.
+
+input=""
+if [ ! -t 0 ]; then input=$(cat); fi
+
+cwd=""
+if [ -n "$input" ]; then
+  cwd=$(printf '%s' "$input" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get('cwd', ''))
+except Exception:
+    pass
+" 2&gt;/dev/null)
+fi
+
+project=$(basename "${cwd:-$PWD}")
+echo "⊡ ${project}  pid:${PPID}"</pre>
+</div>
+
+<h3>Wire it into <code>settings.json</code></h3>
+<p>Add this block to <code>~/.claude/settings.json</code>. If the file already exists, <strong>merge</strong> the <code>statusLine</code> key in — don't replace the whole file.</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="statusline-settings">Copy settings snippet</button>
+<pre id="statusline-settings">{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-ccs.sh"
+  }
+}</pre>
+</div>
+
+<p>One-liner that does the merge safely (creates the file if missing, preserves existing keys, warns if a <code>statusLine</code> is already configured):</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="statusline-merge">Copy merge command</button>
+<pre id="statusline-merge">python3 - &lt;&lt;'PY'
+import json, os, pathlib
+p = pathlib.Path(os.path.expanduser("~/.claude/settings.json"))
+data = {}
+if p.exists():
+    try: data = json.loads(p.read_text())
+    except Exception: data = {}
+if "statusLine" in data:
+    print("statusLine already configured. Existing value:", data["statusLine"])
+    print("Edit ~/.claude/settings.json by hand if you want to switch to the ccs statusline.")
+else:
+    data["statusLine"] = {"type": "command", "command": "bash ~/.claude/statusline-ccs.sh"}
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2))
+    print("Added ccs statusline to ~/.claude/settings.json")
+PY</pre>
+</div>
+
+<p><strong>Restart Claude Code</strong> after installing — the statusline only loads on session start. After restart you should see something like <code>⊡ my-project  pid:54057</code> at the bottom of the window.</p>
+
+<h2 id="first-session">5. Add your first session (sample prompt)</h2>
+<p>Once the statusline is showing a PID, you have everything you need. Here are two ways to register your first session — pick whichever feels natural.</p>
+
+<h3>Option A — From a separate terminal</h3>
+<p>Open a new terminal tab (one that is NOT running Claude Code) and run:</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="first-add">Copy</button>
+<pre id="first-add"># Replace 54057 with the PID shown in YOUR statusline
+ccs add my-first-session 54057 "First test of ccs"
+
+ccs list
+# You should now see my-first-session listed as ● live</pre>
+</div>
+
+<h3>Option B — From inside Claude Code itself</h3>
+<p>Paste this prompt into the Claude Code session you want to register. It tells Claude to read its own PID from the statusline (by inspecting the running process) and register the session with <code>ccs</code>.</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="register-prompt">Copy prompt</button>
+<pre id="register-prompt">Register THIS Claude Code session with ccs.
+
+Steps:
+
+1. Find the PID of the Claude Code process you are running inside. The cleanest
+   way is to read it from the statusline configuration: the statusline script
+   ~/.claude/statusline-ccs.sh uses $PPID, which is the same PID Claude Code
+   writes to ~/.claude/sessions/&lt;pid&gt;.json. So:
+
+     a) Find the most recently modified file in ~/.claude/sessions/ whose
+        `sessionId` matches the current session. If you do not have access to
+        the current session id, fall back to the most recently modified file
+        in that directory — that is almost always this session.
+     b) The PID is the filename without the .json extension.
+
+2. Ask me for a short name for this session (kebab-case, e.g. `auth-refactor`)
+   and an optional one-line description. If I do not respond within one
+   message, default to a name based on the current project folder name +
+   today's date, e.g. `&lt;project&gt;-DD-MM-YYYY`.
+
+3. Run, via the Bash tool:
+
+       ccs add &lt;name&gt; &lt;pid&gt; "&lt;description&gt;"
+
+4. Then run `ccs list` and print the output so I can confirm the row appears.
+
+5. Finally, tell me where the per-project registry file was created:
+
+       &lt;current-project&gt;/.claude/claude-sessions-registry.md
+
+   and show its last 20 lines.
+
+Do not invent a PID. If you cannot resolve one from ~/.claude/sessions/, stop
+and tell me to read it from my statusline manually.</pre>
+</div>
+
+<h2 id="registry">6. The per-project registry — auto-created, no manual step</h2>
 <p>The first time you run <code>ccs add</code> in a project, <code>ccs</code> creates <code>&lt;project&gt;/.claude/claude-sessions-registry.md</code> automatically using the template embedded in the script. After that, every <code>ccs add</code>, <code>ccs remove</code>, <code>ccs rename</code>, and <code>ccs sync</code> rewrites the table inside it. You don't copy a template by hand.</p>
 
 <p>For reference, this is what gets written:</p>
@@ -709,7 +857,7 @@ Global registry file: `~/.claude/named-sessions.json`
 6. Description is auto-populated from the session's first message if not provided.</pre>
 </div>
 
-<h2 id="usage">5. Daily usage</h2>
+<h2 id="usage">7. Daily usage</h2>
 <div class="card">
 <h3>Register a session</h3>
 <p>Look at the statusline of the Claude Code window you want to register. It typically shows the project name and a PID, for example <code>my-project  pid:54057</code>. From any terminal:</p>
@@ -731,12 +879,13 @@ ccs remove my-session
 ccs sync                    # rewrite every project's registry table from the JSON</pre>
 </div>
 
-<h2 id="verify">6. Verification checklist</h2>
+<h2 id="verify">8. Verification checklist</h2>
 <ul>
   <li><span class="good">✓</span> <code>which ccs</code> resolves to <code>~/.local/bin/ccs</code>.</li>
   <li><span class="good">✓</span> <code>ccs</code> (no args) prints the help block.</li>
   <li><span class="good">✓</span> <code>ccs list</code> prints "No sessions registered" on a fresh install.</li>
-  <li><span class="good">✓</span> Start a Claude Code session in any project, note its PID from the statusline, then run <code>ccs add test 12345</code> (substitute the PID). It prints "Resolved PID … -&gt; session …" and "Registered: test".</li>
+  <li><span class="good">✓</span> After restarting Claude Code, the statusline shows <code>⊡ &lt;project&gt;  pid:&lt;number&gt;</code>.</li>
+  <li><span class="good">✓</span> Note that PID, then run <code>ccs add test &lt;pid&gt;</code> from another terminal. It prints "Resolved PID … -&gt; session …" and "Registered: test".</li>
   <li><span class="good">✓</span> <code>cat &lt;that-project&gt;/.claude/claude-sessions-registry.md</code> exists and shows a row for <code>test</code>.</li>
   <li><span class="good">✓</span> <code>ccs remove test</code> removes the row on next sync.</li>
 </ul>
