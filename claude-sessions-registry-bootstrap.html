@@ -783,7 +783,14 @@ ccs list   # should print "No sessions registered. Use: ccs add &lt;name&gt; &lt
 # Claude Code statusline for ccs.
 # Reads the session JSON Claude Code pipes in on stdin, extracts cwd, and
 # prints "⊡ &lt;project-basename&gt;  pid:&lt;claude-code-pid&gt;".
-# The PID is $PPID — i.e. the Claude Code process that spawned this script.
+#
+# Capture $PPID into a named variable on the FIRST line of execution.
+# Rationale: $PPID is the process that invoked this bash — i.e. the running
+# `claude` process — and that is the same PID Claude Code uses as the filename
+# in ~/.claude/sessions/&lt;pid&gt;.json. Saving it before any pipes/subshells run
+# locks in the value and avoids any chance of confusing it with a child PID,
+# a shell-job PID, or the sessionId from the stdin JSON.
+claude_pid="$PPID"
 
 input=""
 if [ ! -t 0 ]; then input=$(cat); fi
@@ -801,7 +808,7 @@ except Exception:
 fi
 
 project=$(basename "${cwd:-$PWD}")
-echo "⊡ ${project}  pid:${PPID}"</pre>
+echo "⊡ ${project}  pid:${claude_pid}"</pre>
 </div>
 
 <h3>Wire it into <code>settings.json</code></h3>
