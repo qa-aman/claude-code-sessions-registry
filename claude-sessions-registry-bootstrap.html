@@ -81,8 +81,8 @@ PRELUDE — make sure you have the source HTML
 This prompt is one piece of a single HTML file that also contains the full
 source of two scripts you will write to disk:
 
-  - the `ccs` script         (inside the <pre> tag whose id="ccs-source")
-  - the statusline script    (inside the <pre> tag whose id="statusline-script")
+  - the `ccs` script         (inside the &lt;pre&gt; tag whose id="ccs-source")
+  - the statusline script    (inside the &lt;pre&gt; tag whose id="statusline-script")
 
 If you already have the HTML in your context (the user shared the file path,
 or this prompt was pasted together with the surrounding page), proceed.
@@ -92,9 +92,9 @@ If you have ONLY this prompt and not the HTML, fetch the canonical copy:
     https://raw.githubusercontent.com/qa-aman/claude-code-sessions-registry/main/claude-sessions-registry-bootstrap.html
 
 Use a WebFetch / curl / Read tool — whichever is available to you. Do not
-proceed until you can locate the two <pre> blocks above.
+proceed until you can locate the two &lt;pre&gt; blocks above.
 
-IMPORTANT — the code inside the <pre> blocks is HTML-encoded. Before writing
+IMPORTANT — the code inside the &lt;pre&gt; blocks is HTML-encoded. Before writing
 to disk, you MUST decode these entities:
 
     &amp;lt;   →   <
@@ -129,7 +129,7 @@ STEPS
      mkdir -p ~/.local/bin ~/.claude
 
 3. WRITE ~/.local/bin/ccs
-   Extract the contents of <pre id="ccs-source"> from the HTML, decode HTML
+   Extract the contents of &lt;pre id="ccs-source"&gt; from the HTML, decode HTML
    entities (see PRELUDE), and write to ~/.local/bin/ccs. Then:
      chmod +x ~/.local/bin/ccs
 
@@ -141,7 +141,7 @@ STEPS
      [ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' > ~/.claude/named-sessions.json
 
 5. WRITE ~/.claude/statusline-ccs.sh
-   Extract <pre id="statusline-script">, decode entities, write to
+   Extract &lt;pre id="statusline-script"&gt;, decode entities, write to
    ~/.claude/statusline-ccs.sh, then:
      chmod +x ~/.claude/statusline-ccs.sh
 
@@ -206,7 +206,7 @@ STEPS
 
      After restart, the bottom of your Claude Code window will show:
 
-         ⊡ <project-name>  pid:54057
+         ⊡ &lt;project-name&gt;  pid:54057
 
      The number after `pid:` is what `ccs add` needs.
 
@@ -220,12 +220,12 @@ STEPS
 
      The first `ccs add` in a project auto-creates a registry file at:
 
-         <current-project>/.claude/claude-sessions-registry.md
+         &lt;current-project&gt;/.claude/claude-sessions-registry.md
 
      Common commands:
          ccs list            # all named sessions with live/idle status
          ccs pids            # all running Claude PIDs
-         ccs open <name>     # resume by name (run outside Claude Code)
+         ccs open &lt;name&gt;     # resume by name (run outside Claude Code)
          ccs sync            # rewrite all per-project registry tables
 
 Stop conditions:
@@ -273,12 +273,12 @@ Global registry file: `~/.claude/named-sessions.json`
 |---|---|
 | `ccs list` | Show all named sessions with live/idle status, created date, last used, message count |
 | `ccs pids` | Show all running Claude processes with PIDs |
-| `ccs open <name>` | Resume a session by name (run outside Claude Code) |
-| `ccs add <name> <pid>` | Register a session using its PID (shown in the statusline) |
-| `ccs add <name> <pid> "<desc>"` | Register with a custom description |
-| `ccs update <name> "<desc>"` | Update description of an existing session |
-| `ccs rename <old> <new>` | Rename a session |
-| `ccs remove <name>` | Delete a session from the registry |
+| `ccs open &lt;name&gt;` | Resume a session by name (run outside Claude Code) |
+| `ccs add &lt;name&gt; &lt;pid&gt;` | Register a session using its PID (shown in the statusline) |
+| `ccs add &lt;name&gt; &lt;pid&gt; "&lt;desc&gt;"` | Register with a custom description |
+| `ccs update &lt;name&gt; "&lt;desc&gt;"` | Update description of an existing session |
+| `ccs rename &lt;old&gt; &lt;new&gt;` | Rename a session |
+| `ccs remove &lt;name&gt;` | Delete a session from the registry |
 | `ccs sync` | Force-rebuild every project's registry table from the global JSON |
 | `ccs sessions` | Browse last 30 sessions from history |
 
@@ -846,12 +846,28 @@ PY</pre>
 <p>Once the statusline is showing a PID, you have everything you need. Here are two ways to register your first session — pick whichever feels natural.</p>
 
 <h3>Option A — From a separate terminal</h3>
+
+<p>The <code>ccs add</code> command takes three arguments:</p>
+
+<pre>ccs add  &lt;name&gt;             &lt;pid&gt;    "&lt;description&gt;"
+         │                  │        │
+         │                  │        └── optional free text. Skip if you don't want one.
+         │                  │           If omitted, ccs auto-fills it from the first
+         │                  │           message of the session.
+         │                  │
+         │                  └── the number shown after `pid:` in your Claude Code statusline
+         │                      (e.g. for `⊡ my-project  pid:54057`, this is `54057`)
+         │
+         └── a short kebab-case label you'll use to find this session later
+             (e.g. `auth-refactor`, `mira-spec-review`, `inbox-zero`)</pre>
+
 <p>Open a new terminal tab (one that is NOT running Claude Code) and run:</p>
 
 <div class="copy-wrap">
 <button class="copy-btn" data-target="first-add">Copy</button>
-<pre id="first-add"># Replace 54057 with the PID shown in YOUR statusline
-ccs add my-first-session 54057 "First test of ccs"
+<pre id="first-add"># Replace 54057 with the PID shown in YOUR statusline.
+# Arguments:  name              pid    description
+ccs add       my-first-session  54057  "First test of ccs"
 
 ccs list
 # You should now see my-first-session listed as ● live</pre>
@@ -937,12 +953,12 @@ Global registry file: `~/.claude/named-sessions.json`
 |---|---|
 | `ccs list` | Show all named sessions with live/idle status, created date, last used, message count |
 | `ccs pids` | Show all running Claude processes with PIDs |
-| `ccs open <name>` | Resume a session by name (run outside Claude Code) |
-| `ccs add <name> <pid>` | Register a session using its PID (shown in the statusline) |
-| `ccs add <name> <pid> "<desc>"` | Register with a custom description |
-| `ccs update <name> "<desc>"` | Update description of an existing session |
-| `ccs rename <old> <new>` | Rename a session |
-| `ccs remove <name>` | Delete a session from the registry |
+| `ccs open &lt;name&gt;` | Resume a session by name (run outside Claude Code) |
+| `ccs add &lt;name&gt; &lt;pid&gt;` | Register a session using its PID (shown in the statusline) |
+| `ccs add &lt;name&gt; &lt;pid&gt; "&lt;desc&gt;"` | Register with a custom description |
+| `ccs update &lt;name&gt; "&lt;desc&gt;"` | Update description of an existing session |
+| `ccs rename &lt;old&gt; &lt;new&gt;` | Rename a session |
+| `ccs remove &lt;name&gt;` | Delete a session from the registry |
 | `ccs sync` | Force-rebuild every project's registry table from the global JSON |
 | `ccs sessions` | Browse last 30 sessions from history |
 
@@ -961,9 +977,10 @@ Global registry file: `~/.claude/named-sessions.json`
 <h2 id="usage">7. Daily usage</h2>
 <div class="card">
 <h3>Register a session</h3>
-<p>Look at the statusline of the Claude Code window you want to register. It typically shows the project name and a PID, for example <code>my-project  pid:54057</code>. From any terminal:</p>
-<pre>ccs add my-session 54057
-ccs add my-session 54057 "Working on the auth refactor"</pre>
+<p>Look at the statusline of the Claude Code window you want to register. It shows the project name and a PID, e.g. <code>⊡ my-project  pid:54057</code>. From any terminal:</p>
+<pre># Arguments:  name         pid    description (optional)
+ccs add       my-session   54057
+ccs add       my-session   54057  "Working on the auth refactor"</pre>
 <p>Or from inside Claude Code itself, prefix with <code>!</code>:</p>
 <pre>! ccs add my-session 54057</pre>
 
