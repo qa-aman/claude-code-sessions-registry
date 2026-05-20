@@ -50,6 +50,7 @@
   <li><a href="#registry">Per-project <code>claude-sessions-registry.md</code> template</a></li>
   <li><a href="#usage">Daily usage</a></li>
   <li><a href="#maintain">Updating and uninstalling</a></li>
+  <li><a href="#troubleshoot">Troubleshooting</a></li>
   <li><a href="#verify">Verification checklist</a></li>
 </ol>
 </div>
@@ -146,7 +147,8 @@ STEPS
      chmod +x ~/.claude/statusline-ccs.sh
 
 6. MERGE THE STATUSLINE INTO settings.json (non-destructive)
-   Run this exact python3 snippet:
+   Run this exact python3 snippet (remember: the &lt;&lt; below is HTML-encoded as
+   `&amp;lt;&amp;lt;` in the source — decode it to `&lt;&lt;` before pasting to bash):
 
        python3 - &lt;&lt;'PY'
        import json, os, pathlib
@@ -230,6 +232,9 @@ STEPS
 
 Stop conditions:
 - A required tool is missing → ask the user to install it.
+- Step 6 reports "settings.json exists but is invalid JSON" → DO NOT try to
+  fix it yourself. Tell the user the file is malformed and ask them to fix
+  it (or move it aside) before re-running the bootstrap.
 - A step produces an unexpected error → paste the failing command and error
   output, then ask the user how to proceed.
 - Never invent paths, PIDs, or content. Never skip the smoke test.</pre>
@@ -523,7 +528,7 @@ print(s['id'] if s else 'NOT_FOUND')
 import json, os
 SESSIONS_DIR = os.path.expanduser("$SESSIONS_DIR")
 arg3 = "$arg3"
-if arg3.isdigit() and len(arg3) &lt;= 6:
+if arg3.isdigit() and len(arg3) &lt;= 7:
     pid_file = os.path.join(SESSIONS_DIR, arg3 + ".json")
     if os.path.exists(pid_file):
         try:
@@ -551,7 +556,7 @@ project_path = ""
 project_name = ""
 pid_str      = ""
 
-if arg3.isdigit() and len(arg3) &lt;= 6:
+if arg3.isdigit() and len(arg3) &lt;= 7:
     pid_file = os.path.join(SESSIONS_DIR, arg3 + ".json")
     if os.path.exists(pid_file):
         with open(pid_file) as f:
@@ -745,6 +750,7 @@ esac</pre>
 </div>
 
 <h3>Manual install (if you prefer not to use the prompt above)</h3>
+<p>This block installs only the <code>ccs</code> CLI. To make <code>ccs add</code> easy to use you also need the statusline — continue to <a href="#statusline">§4</a> after running these commands.</p>
 <div class="copy-wrap">
 <button class="copy-btn" data-target="ccs-install">Copy install commands</button>
 <pre id="ccs-install">mkdir -p ~/.local/bin ~/.claude
@@ -760,7 +766,9 @@ source ~/.zshrc
 [ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' &gt; ~/.claude/named-sessions.json
 
 # Smoke test
-ccs list   # should print "No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;"</pre>
+ccs list   # should print "No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;"
+
+# Next: set up the statusline (§4) so `ccs add` knows which PID to use.</pre>
 </div>
 
 <h2 id="statusline">4. Configure the statusline to show the PID</h2>
@@ -1027,7 +1035,44 @@ PY
 # find ~ -path '*/.claude/claude-sessions-registry.md' -print</pre>
 </div>
 
-<h2 id="verify">9. Verification checklist</h2>
+<h2 id="troubleshoot">9. Troubleshooting</h2>
+<table>
+<thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>ccs: command not found</code></td>
+  <td><code>~/.local/bin</code> not on PATH in this terminal.</td>
+  <td>Open a new terminal, or <code>source ~/.zshrc</code> / <code>~/.bashrc</code>. Confirm with <code>echo $PATH</code>.</td>
+</tr>
+<tr>
+  <td>Statusline doesn't appear after install</td>
+  <td>Claude Code wasn't restarted, or <code>statusLine</code> wasn't merged.</td>
+  <td>Quit and reopen Claude Code. Verify with <code>cat ~/.claude/settings.json</code> — you should see the <code>statusLine</code> key.</td>
+</tr>
+<tr>
+  <td>Statusline shows <code>pid:1</code> or a wrong PID</td>
+  <td>Claude Code launched the script via a wrapper that broke <code>$PPID</code>.</td>
+  <td>Read the PID directly with <code>ps -ef | grep -E '[Cc]laude' | grep -v grep</code> and pass it to <code>ccs add</code> manually.</td>
+</tr>
+<tr>
+  <td><code>ccs add</code> says <code>No session file for PID &lt;n&gt;</code></td>
+  <td>You passed a PID from a Claude Code process that hasn't created a session file yet (brand-new install, or first launch in progress).</td>
+  <td>Send at least one message in the Claude Code session, then re-run <code>ccs add</code>. Or pass the full session ID instead of a PID.</td>
+</tr>
+<tr>
+  <td>Per-project registry file isn't created</td>
+  <td>You registered by session ID instead of by PID — the script can only resolve the project from a PID.</td>
+  <td>Re-register using the PID from the statusline. The session ID path is a fallback for when the PID's session file is missing.</td>
+</tr>
+<tr>
+  <td>Step 6 says "settings.json is invalid JSON"</td>
+  <td>The file is malformed.</td>
+  <td>Open it in an editor and fix the syntax (or move it aside as <code>settings.json.bak</code>), then re-run the bootstrap.</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="verify">10. Verification checklist</h2>
 <ul>
   <li><span class="good">✓</span> <code>which ccs</code> resolves to <code>~/.local/bin/ccs</code>.</li>
   <li><span class="good">✓</span> <code>ccs</code> (no args) prints the help block.</li>
