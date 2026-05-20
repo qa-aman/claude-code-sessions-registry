@@ -49,6 +49,7 @@
   <li><a href="#first-session">Add your first session (sample prompt)</a></li>
   <li><a href="#registry">Per-project <code>claude-sessions-registry.md</code> template</a></li>
   <li><a href="#usage">Daily usage</a></li>
+  <li><a href="#maintain">Updating and uninstalling</a></li>
   <li><a href="#verify">Verification checklist</a></li>
 </ol>
 </div>
@@ -72,85 +73,166 @@
 <div class="copy-wrap">
 <button class="copy-btn" data-target="bootstrap-prompt">Copy</button>
 <pre id="bootstrap-prompt">You are installing the `ccs` (Claude Code Sessions) manager on this machine.
-Execute the steps below in order. Stop and ask only if a step fails.
+Follow the steps below in order. They are designed to be safe to re-run.
 
-CONTEXT
-- `ccs` is a single bash script that lets the user name, list, and resume their
-  Claude Code sessions across multiple terminals.
-- It uses only local files: ~/.local/bin/ccs (the CLI), ~/.claude/named-sessions.json
-  (the registry), and one auto-created markdown file per project that uses it.
-- No external services, no secrets, no network calls. Pure bash + python3.
+═══════════════════════════════════════════════════════════════════════
+PRELUDE — make sure you have the source HTML
+═══════════════════════════════════════════════════════════════════════
+This prompt is one piece of a single HTML file that also contains the full
+source of two scripts you will write to disk:
 
+  - the `ccs` script         (inside the <pre> tag whose id="ccs-source")
+  - the statusline script    (inside the <pre> tag whose id="statusline-script")
+
+If you already have the HTML in your context (the user shared the file path,
+or this prompt was pasted together with the surrounding page), proceed.
+
+If you have ONLY this prompt and not the HTML, fetch the canonical copy:
+
+    https://raw.githubusercontent.com/qa-aman/claude-code-sessions-registry/main/claude-sessions-registry-bootstrap.html
+
+Use a WebFetch / curl / Read tool — whichever is available to you. Do not
+proceed until you can locate the two <pre> blocks above.
+
+IMPORTANT — the code inside the <pre> blocks is HTML-encoded. Before writing
+to disk, you MUST decode these entities:
+
+    &amp;lt;   →   <
+    &amp;gt;   →   >
+    &amp;amp;  →   &
+    &amp;quot; →   "
+
+Failure to decode will produce a broken script. Verify the first few lines
+of each saved file look like valid bash, not HTML.
+
+═══════════════════════════════════════════════════════════════════════
+CONTEXT — what gets installed
+═══════════════════════════════════════════════════════════════════════
+- ~/.local/bin/ccs                    the CLI (bash + embedded python3)
+- ~/.claude/named-sessions.json       the global registry
+- ~/.claude/statusline-ccs.sh         the statusline (shows project + PID)
+- ~/.claude/settings.json             gets a `statusLine` key merged in
+- shell rc (~/.zshrc or ~/.bashrc)    one PATH export added if missing
+
+No network calls, no secrets, no external services after install.
+
+═══════════════════════════════════════════════════════════════════════
 STEPS
+═══════════════════════════════════════════════════════════════════════
 
-1. PREREQS — verify these are present (all standard on macOS/Linux):
-     - bash, python3 (>= 3.9), mkdir, chmod
-   Claude Code itself must already be installed and authenticated, which it is
-   if you are reading this prompt.
+1. PREREQS
+   Verify `bash`, `python3` (>= 3.9), `mkdir`, `chmod` are present. They are
+   standard on macOS and Linux. On Windows, this requires WSL — abort and
+   tell the user if you detect raw Windows.
 
-2. CREATE THE INSTALL DIRECTORY
-     mkdir -p ~/.local/bin
-     mkdir -p ~/.claude
+2. CREATE DIRECTORIES (idempotent)
+     mkdir -p ~/.local/bin ~/.claude
 
-3. WRITE THE `ccs` SCRIPT
-   Save the full script from Section 3 of the HTML file you were given to
-   ~/.local/bin/ccs, then make it executable:
+3. WRITE ~/.local/bin/ccs
+   Extract the contents of <pre id="ccs-source"> from the HTML, decode HTML
+   entities (see PRELUDE), and write to ~/.local/bin/ccs. Then:
      chmod +x ~/.local/bin/ccs
-   Do not modify the script. It auto-detects projects from each session's
-   working directory — there are no hardcoded paths to edit.
 
-4. INITIALISE AN EMPTY REGISTRY (idempotent — safe to re-run)
+   Idempotency: if the file already exists, overwrite — the script is
+   self-contained and a newer copy is always preferable. Do not back up
+   the old one unless the user asks.
+
+4. INITIALISE THE REGISTRY (idempotent)
      [ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' > ~/.claude/named-sessions.json
 
-5. CONFIGURE THE STATUSLINE TO SHOW THE PID
-   `ccs add` needs the Claude Code PID, which is easiest to read from the
-   statusline at the bottom of the Claude Code window. Save the statusline
-   script from Section 4 of the HTML to ~/.claude/statusline-ccs.sh and
-   chmod +x it. Then patch (or create) ~/.claude/settings.json to set:
-       "statusLine": {
-         "type": "command",
-         "command": "bash ~/.claude/statusline-ccs.sh"
-       }
-   If settings.json already exists, MERGE this key — do not clobber existing
-   keys. Use python3 -c with json.load/dump for the merge. If the user
-   already has a statusLine configured, ASK before overwriting it.
+5. WRITE ~/.claude/statusline-ccs.sh
+   Extract <pre id="statusline-script">, decode entities, write to
+   ~/.claude/statusline-ccs.sh, then:
+     chmod +x ~/.claude/statusline-ccs.sh
 
-6. ENSURE ~/.local/bin IS ON PATH
-   Detect the user's shell rc file (~/.zshrc for zsh, ~/.bashrc for bash) and
-   append `export PATH="$HOME/.local/bin:$PATH"` if not already present. Tell
-   the user they must open a new terminal (or `source` the file) for ccs to
-   resolve on PATH.
+6. MERGE THE STATUSLINE INTO settings.json (non-destructive)
+   Run this exact python3 snippet:
 
-7. SMOKE TEST
-   Run `~/.local/bin/ccs list` and confirm it prints "No sessions registered".
-   If it errors, paste the error and stop.
+       python3 - &lt;&lt;'PY'
+       import json, os, pathlib
+       p = pathlib.Path(os.path.expanduser("~/.claude/settings.json"))
+       data = {}
+       if p.exists():
+           try: data = json.loads(p.read_text())
+           except Exception:
+               print("settings.json exists but is invalid JSON. Aborting merge — fix it manually.")
+               raise SystemExit(1)
+       existing = data.get("statusLine")
+       target = {"type": "command", "command": "bash ~/.claude/statusline-ccs.sh"}
+       if existing == target:
+           print("statusLine already pointing at ccs — nothing to do.")
+       elif existing:
+           print("Existing statusLine found:", existing)
+           print("Leaving it untouched. To switch, edit ~/.claude/settings.json by hand.")
+       else:
+           data["statusLine"] = target
+           p.parent.mkdir(parents=True, exist_ok=True)
+           p.write_text(json.dumps(data, indent=2))
+           print("Added ccs statusline to ~/.claude/settings.json")
+       PY
 
-8. TELL THE USER WHAT TO DO NEXT
-   Print these instructions verbatim:
+   Tell the user: a Claude Code RESTART is required for the new statusline
+   to take effect.
 
-     RESTART CLAUDE CODE so the new statusline takes effect. After restart,
-     the statusline at the bottom of the window will show something like:
+7. ADD ~/.local/bin TO PATH (shell-aware, idempotent)
+   Pick the right shell rc:
+
+       case "${SHELL:-}" in
+         */zsh)  RC="$HOME/.zshrc" ;;
+         */bash) RC="$HOME/.bashrc" ;;
+         */fish) RC="" ;;
+         *)      RC="$HOME/.profile" ;;
+       esac
+
+   If RC is empty (fish or unknown):
+     print: "Add ~/.local/bin to your PATH manually in your shell config."
+   Else:
+     touch "$RC"
+     grep -q '\.local/bin' "$RC" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC"
+
+   Tell the user: open a new terminal (or `source "$RC"`) before running ccs.
+
+8. SMOKE TEST
+     ~/.local/bin/ccs list
+   Expected output: "No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;"
+   If you see a Python traceback or "command not found", stop and paste the
+   full error to the user.
+
+9. TELL THE USER WHAT TO DO NEXT (print verbatim)
+
+     ✓ ccs is installed.
+     ✓ Statusline is configured.
+     → RESTART CLAUDE CODE so the statusline shows up.
+
+     After restart, the bottom of your Claude Code window will show:
 
          ⊡ <project-name>  pid:54057
 
-     That number after `pid:` is what `ccs add` needs.
+     The number after `pid:` is what `ccs add` needs.
 
-     To register the CURRENT Claude Code session you are in, open a separate
-     terminal (or use `!` inside Claude Code) and run:
+     To register THIS Claude Code session, open a separate terminal and run:
 
-         ccs add my-session 54057          # substitute your PID
+         ccs add my-session 54057          # substitute your real PID
 
-     That command auto-creates `<current-project>/.claude/claude-sessions-registry.md`
-     the first time and adds your session to the table.
+     Or, from inside Claude Code itself, prefix with `!`:
 
-     Useful commands:
+         ! ccs add my-session 54057
+
+     The first `ccs add` in a project auto-creates a registry file at:
+
+         <current-project>/.claude/claude-sessions-registry.md
+
+     Common commands:
          ccs list            # all named sessions with live/idle status
          ccs pids            # all running Claude PIDs
          ccs open <name>     # resume by name (run outside Claude Code)
          ccs sync            # rewrite all per-project registry tables
 
-If any step fails, print the failing command and its error, then stop and ask
-the user how to proceed. Do not invent paths or skip the smoke test.</pre>
+Stop conditions:
+- A required tool is missing → ask the user to install it.
+- A step produces an unexpected error → paste the failing command and error
+  output, then ask the user how to proceed.
+- Never invent paths, PIDs, or content. Never skip the smoke test.</pre>
 </div>
 
 <h2 id="ccs">3. The <code>ccs</code> session manager — full embedded script</h2>
@@ -749,7 +831,16 @@ else:
 PY</pre>
 </div>
 
-<p><strong>Restart Claude Code</strong> after installing — the statusline only loads on session start. After restart you should see something like <code>⊡ my-project  pid:54057</code> at the bottom of the window.</p>
+<p><strong>Restart Claude Code</strong> after installing — the statusline only loads on session start. After restart, the bottom of your Claude Code window will look something like this:</p>
+
+<pre>┌──────────────────────────────────────────────────────────────┐
+│ &gt; your prompt here                                          │
+│                                                              │
+│                                                              │
+│ ⊡ my-project  pid:54057                                      │
+└──────────────────────────────────────────────────────────────┘</pre>
+
+<p>The number after <code>pid:</code> is what <code>ccs add</code> wants.</p>
 
 <h2 id="first-session">5. Add your first session (sample prompt)</h2>
 <p>Once the statusline is showing a PID, you have everything you need. Here are two ways to register your first session — pick whichever feels natural.</p>
@@ -773,38 +864,48 @@ ccs list
 <button class="copy-btn" data-target="register-prompt">Copy prompt</button>
 <pre id="register-prompt">Register THIS Claude Code session with ccs.
 
-Steps:
+STEP 1 — Resolve the PID of the Claude Code process you are running inside.
 
-1. Find the PID of the Claude Code process you are running inside. The cleanest
-   way is to read it from the statusline configuration: the statusline script
-   ~/.claude/statusline-ccs.sh uses $PPID, which is the same PID Claude Code
-   writes to ~/.claude/sessions/&lt;pid&gt;.json. So:
+Try these methods in order, stop at the first one that returns a valid PID:
 
-     a) Find the most recently modified file in ~/.claude/sessions/ whose
-        `sessionId` matches the current session. If you do not have access to
-        the current session id, fall back to the most recently modified file
-        in that directory — that is almost always this session.
-     b) The PID is the filename without the .json extension.
+  a) Run: ps -ef | grep -E '[Cc]laude' | grep -v grep
+     Pick the line whose `pwd`/cwd matches the current working directory.
+     The second column is the PID.
 
-2. Ask me for a short name for this session (kebab-case, e.g. `auth-refactor`)
-   and an optional one-line description. If I do not respond within one
-   message, default to a name based on the current project folder name +
-   today's date, e.g. `&lt;project&gt;-DD-MM-YYYY`.
+  b) If (a) is ambiguous, list ~/.claude/sessions/*.json sorted by mtime
+     descending and read each file's `cwd` field. Pick the one whose `cwd`
+     equals the current working directory of THIS session. The filename
+     (without .json) is the PID.
 
-3. Run, via the Bash tool:
+  c) If you still cannot resolve a PID with high confidence, STOP and ask
+     the user to read it from the statusline at the bottom of the window
+     (format: `⊡ &lt;project&gt;  pid:&lt;number&gt;`).
 
-       ccs add &lt;name&gt; &lt;pid&gt; "&lt;description&gt;"
+Never guess a PID. If two candidates exist, ask the user to disambiguate.
 
-4. Then run `ccs list` and print the output so I can confirm the row appears.
+STEP 2 — Ask the user for a short name (kebab-case, e.g. `auth-refactor`)
+and an optional one-line description. If no description is given, omit it —
+ccs will auto-fill from the first message of the session.
 
-5. Finally, tell me where the per-project registry file was created:
+STEP 3 — Register, via the Bash tool:
 
-       &lt;current-project&gt;/.claude/claude-sessions-registry.md
+    ccs add &lt;name&gt; &lt;pid&gt; "&lt;description-or-empty&gt;"
 
-   and show its last 20 lines.
+STEP 4 — Confirm:
 
-Do not invent a PID. If you cannot resolve one from ~/.claude/sessions/, stop
-and tell me to read it from my statusline manually.</pre>
+    ccs list
+
+Print the output. The new row should show status `● live`.
+
+STEP 5 — Show where the per-project registry was created or updated:
+
+    &lt;current-project&gt;/.claude/claude-sessions-registry.md
+
+Read the file and print its `## Registered Sessions` table so the user can
+see the row landed.
+
+Do not invent paths, PIDs, or descriptions. If any step fails, paste the
+error and stop.</pre>
 </div>
 
 <h2 id="registry">6. The per-project registry — auto-created, no manual step</h2>
@@ -879,7 +980,37 @@ ccs remove my-session
 ccs sync                    # rewrite every project's registry table from the JSON</pre>
 </div>
 
-<h2 id="verify">8. Verification checklist</h2>
+<h2 id="maintain">8. Updating and uninstalling</h2>
+
+<h3>Update <code>ccs</code></h3>
+<p>The script is self-contained. To update, just paste the bootstrap prompt again — step 3 overwrites <code>~/.local/bin/ccs</code> with the current version from the HTML. Your registry (<code>~/.claude/named-sessions.json</code>) and every project's registry markdown are untouched.</p>
+
+<h3>Uninstall</h3>
+<div class="copy-wrap">
+<button class="copy-btn" data-target="uninstall">Copy uninstall commands</button>
+<pre id="uninstall"># Remove the CLI and statusline
+rm -f ~/.local/bin/ccs ~/.claude/statusline-ccs.sh
+
+# Remove the statusLine key from settings.json (preserves other keys)
+python3 - &lt;&lt;'PY'
+import json, os, pathlib
+p = pathlib.Path(os.path.expanduser("~/.claude/settings.json"))
+if p.exists():
+    data = json.loads(p.read_text())
+    if isinstance(data.get("statusLine"), dict) and "statusline-ccs.sh" in data["statusLine"].get("command", ""):
+        del data["statusLine"]
+        p.write_text(json.dumps(data, indent=2))
+        print("Removed ccs statusLine from settings.json")
+PY
+
+# Registry data — REMOVE ONLY IF YOU WANT TO ERASE NAMED SESSIONS
+# rm ~/.claude/named-sessions.json
+
+# Per-project registry files are left in place; delete by hand if you want:
+# find ~ -path '*/.claude/claude-sessions-registry.md' -print</pre>
+</div>
+
+<h2 id="verify">9. Verification checklist</h2>
 <ul>
   <li><span class="good">✓</span> <code>which ccs</code> resolves to <code>~/.local/bin/ccs</code>.</li>
   <li><span class="good">✓</span> <code>ccs</code> (no args) prints the help block.</li>
