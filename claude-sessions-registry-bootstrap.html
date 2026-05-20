@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Claude Code — Named Sessions Registry Bootstrap</title>
+<style>
+  :root { --bg:#0f1115; --fg:#e6e6e6; --muted:#9aa3b2; --accent:#7dd3fc; --accent2:#fbbf24; --card:#171a21; --border:#2a2f3a; --good:#34d399; --warn:#f87171; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:0; line-height:1.55; }
+  .wrap { max-width:980px; margin:0 auto; padding:32px 24px 80px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  h2 { font-size:21px; margin:32px 0 10px; color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:6px; }
+  h3 { font-size:17px; margin:22px 0 8px; color:var(--accent2); }
+  .sub { color:var(--muted); margin:0 0 24px; font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin:14px 0; }
+  .pill { display:inline-block; background:#1f2530; color:var(--accent); padding:2px 8px; border-radius:999px; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  code { background:#1f2530; padding:1px 6px; border-radius:4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; color:#fde68a; }
+  pre { background:#0a0c10; border:1px solid var(--border); border-radius:8px; padding:14px 16px; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; line-height:1.5; color:#e8e8e8; white-space:pre; }
+  .copy-wrap { position:relative; }
+  .copy-btn { position:absolute; top:8px; right:8px; background:#2a2f3a; color:var(--fg); border:1px solid var(--border); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  .copy-btn:hover { background:#3a4150; }
+  .copy-btn.copied { background:var(--good); color:#0a0c10; border-color:var(--good); }
+  table { border-collapse:collapse; width:100%; margin:8px 0; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#1f2530; color:var(--accent); }
+  .warn { color:var(--warn); }
+  .good { color:var(--good); }
+  ol, ul { padding-left:22px; }
+  li { margin:4px 0; }
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 20px; font-size:14px; }
+  .toc a { color:var(--accent); text-decoration:none; }
+  .toc a:hover { text-decoration:underline; }
+  hr { border:0; border-top:1px solid var(--border); margin:32px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Claude Code — Named Sessions Registry Bootstrap</h1>
+<p class="sub">A self-contained, zero-dependency HTML file. Hand it to a fresh Claude Code session and it will install <code>ccs</code> — a tiny session manager that lets you name, list, and resume your Claude Code sessions across many terminals without ever using the <code>/resume</code> picker. Works on macOS and Linux. No secrets, no external services, no GitHub repos needed.</p>
+
+<div class="toc">
+<strong>Contents</strong>
+<ol>
+  <li><a href="#overview">What this is</a></li>
+  <li><a href="#prompt">The bootstrap prompt (paste into a fresh Claude Code session)</a></li>
+  <li><a href="#ccs">The <code>ccs</code> session manager — full embedded script</a></li>
+  <li><a href="#registry">Per-project <code>claude-sessions-registry.md</code> template</a></li>
+  <li><a href="#usage">Daily usage</a></li>
+  <li><a href="#verify">Verification checklist</a></li>
+</ol>
+</div>
+
+<h2 id="overview">1. What this is</h2>
+<div class="card">
+<p>If you run 5+ Claude Code sessions in parallel across projects, the built-in <code>/resume</code> picker becomes unusable — every session looks like a hex ID, and you forget which is which.</p>
+<p><strong>ccs</strong> solves this with three small pieces:</p>
+<ol>
+  <li>A single bash script at <code>~/.local/bin/ccs</code> — the CLI.</li>
+  <li>A global registry JSON at <code>~/.claude/named-sessions.json</code> — the source of truth.</li>
+  <li>A per-project markdown file at <code>&lt;project&gt;/.claude/claude-sessions-registry.md</code> — auto-created the first time you register a session in that project. The table inside is rewritten by <code>ccs</code> on every change, so you can browse "what sessions exist for this project" right in your repo.</li>
+</ol>
+<p>That's the whole system. No daemons, no databases, no cloud sync. Everything is local files you can read and edit.</p>
+</div>
+
+<h2 id="prompt">2. The bootstrap prompt</h2>
+<p>Open a fresh Claude Code session in any directory and paste this prompt verbatim. It will install <code>ccs</code>, set up your PATH, and verify the install.</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="bootstrap-prompt">Copy</button>
+<pre id="bootstrap-prompt">You are installing the `ccs` (Claude Code Sessions) manager on this machine.
+Execute the steps below in order. Stop and ask only if a step fails.
+
+CONTEXT
+- `ccs` is a single bash script that lets the user name, list, and resume their
+  Claude Code sessions across multiple terminals.
+- It uses only local files: ~/.local/bin/ccs (the CLI), ~/.claude/named-sessions.json
+  (the registry), and one auto-created markdown file per project that uses it.
+- No external services, no secrets, no network calls. Pure bash + python3.
+
+STEPS
+
+1. PREREQS — verify these are present (all standard on macOS/Linux):
+     - bash, python3 (>= 3.9), mkdir, chmod
+   Claude Code itself must already be installed and authenticated, which it is
+   if you are reading this prompt.
+
+2. CREATE THE INSTALL DIRECTORY
+     mkdir -p ~/.local/bin
+     mkdir -p ~/.claude
+
+3. WRITE THE `ccs` SCRIPT
+   Save the full script from Section 3 of the HTML file you were given to
+   ~/.local/bin/ccs, then make it executable:
+     chmod +x ~/.local/bin/ccs
+   Do not modify the script. It auto-detects projects from each session's
+   working directory — there are no hardcoded paths to edit.
+
+4. INITIALISE AN EMPTY REGISTRY (idempotent — safe to re-run)
+     [ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' > ~/.claude/named-sessions.json
+
+5. ENSURE ~/.local/bin IS ON PATH
+   Detect the user's shell rc file (~/.zshrc for zsh, ~/.bashrc for bash) and
+   append `export PATH="$HOME/.local/bin:$PATH"` if not already present. Tell
+   the user they must open a new terminal (or `source` the file) for ccs to
+   resolve on PATH.
+
+6. SMOKE TEST
+   Run `~/.local/bin/ccs list` and confirm it prints "No sessions registered".
+   If it errors, paste the error and stop.
+
+7. SHOW THE USER HOW TO REGISTER THEIR FIRST SESSION
+   Print these instructions verbatim:
+
+     The statusline at the bottom of your Claude Code window shows the PID of
+     the current session. From a separate terminal (or with `!` inside Claude
+     Code), register it with a name:
+
+         ccs add my-session <pid>
+
+     That creates `<current-project>/.claude/claude-sessions-registry.md`
+     automatically if it does not exist, and adds your session to the table.
+
+     Useful commands:
+         ccs list            # all named sessions with live/idle status
+         ccs pids            # all running Claude PIDs
+         ccs open <name>     # resume by name (run outside Claude Code)
+         ccs sync            # rewrite all per-project registry tables
+
+If any step fails, print the failing command and its error, then stop and ask
+the user how to proceed. Do not invent paths or skip the smoke test.</pre>
+</div>
+
+<h2 id="ccs">3. The <code>ccs</code> session manager — full embedded script</h2>
+<p>This is the <strong>complete</strong> source of <code>~/.local/bin/ccs</code>. It auto-discovers projects from each session's working directory — there are no hardcoded paths. Copy this entire block into <code>~/.local/bin/ccs</code> and <code>chmod +x</code>.</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="ccs-source">Copy ccs script</button>
+<pre id="ccs-source">#!/usr/bin/env bash
+# ccs — Claude Code Sessions manager
+# Name, list, and resume Claude Code sessions across terminals.
+# Per-project registry files are auto-created on first `ccs add` in that project.
+
+REGISTRY="$HOME/.claude/named-sessions.json"
+SESSIONS_DIR="$HOME/.claude/sessions"
+HISTORY="$HOME/.claude/history.jsonl"
+
+# Embedded template — written on first `ccs add` inside a new project.
+read -r -d '' REGISTRY_TEMPLATE &lt;&lt; 'TEMPLATE_EOF' || true
+# Claude Code Sessions Registry
+
+Name, list, and resume Claude Code sessions for this project without using `/resume`.
+Global registry file: `~/.claude/named-sessions.json`
+
+---
+
+## Registered Sessions
+
+&gt; Auto-synced on every `ccs add`, `ccs rename`, `ccs remove`, and `ccs sync`.
+
+| Name | PID | Status | Created | Last Used | Msgs | Description |
+|---|---|---|---|---|---|---|
+| — | — | — | — | — | — | No sessions registered for this project yet |
+---
+
+## Quick Reference
+
+| Command | What it does |
+|---|---|
+| `ccs list` | Show all named sessions with live/idle status, created date, last used, message count |
+| `ccs pids` | Show all running Claude processes with PIDs |
+| `ccs open <name>` | Resume a session by name (run outside Claude Code) |
+| `ccs add <name> <pid>` | Register a session using its PID (shown in the statusline) |
+| `ccs add <name> <pid> "<desc>"` | Register with a custom description |
+| `ccs update <name> "<desc>"` | Update description of an existing session |
+| `ccs rename <old> <new>` | Rename a session |
+| `ccs remove <name>` | Delete a session from the registry |
+| `ccs sync` | Force-rebuild every project's registry table from the global JSON |
+| `ccs sessions` | Browse last 30 sessions from history |
+
+---
+
+## Notes
+
+1. `ccs open` must be run **outside** an active Claude Code session.
+2. All other commands work both in terminal and inside Claude Code via `!`.
+3. `○ idle` means the terminal process ended but the session is still resumable.
+4. Session names are case-sensitive. Use lowercase kebab-case.
+5. The Registered Sessions table is auto-maintained — never edit it manually. Run `ccs sync` if it looks stale.
+6. Description is auto-populated from the session's first message if not provided.
+TEMPLATE_EOF
+
+# Ensure a registry file exists for the given project path. Creates the dir+file
+# from the embedded template only if missing. Safe to call repeatedly.
+ensure_project_md() {
+  local project_path="$1"
+  [ -z "$project_path" ] &amp;&amp; return 0
+  local md="$project_path/.claude/claude-sessions-registry.md"
+  if [ ! -f "$md" ]; then
+    mkdir -p "$project_path/.claude"
+    printf '%s\n' "$REGISTRY_TEMPLATE" &gt; "$md"
+    echo "Created $md"
+  fi
+}
+
+# Rewrite each project's Registered Sessions table with only its own sessions.
+# Projects are discovered from the `project_path` stored on each registry entry.
+sync_md() {
+python3 &lt;&lt; 'PYEOF'
+import json, os, glob, re, datetime, collections
+
+REGISTRY     = os.path.expanduser("~/.claude/named-sessions.json")
+SESSIONS_DIR = os.path.expanduser("~/.claude/sessions")
+HISTORY      = os.path.expanduser("~/.claude/history.jsonl")
+
+with open(REGISTRY) as f:
+    data = json.load(f)
+all_sessions = data.get("sessions", {})
+
+# Group sessions by their stored project_path.
+by_project = collections.defaultdict(dict)
+for name, info in all_sessions.items():
+    pp = info.get("project_path", "")
+    if pp:
+        by_project[pp][name] = info
+
+# Single pass through history for last_used + msg_count.
+last_used = collections.defaultdict(int)
+msg_count = collections.defaultdict(int)
+if os.path.exists(HISTORY):
+    with open(HISTORY) as f:
+        for line in f:
+            try:
+                e = json.loads(line.strip())
+                sid = e.get("sessionId", "")
+                ts  = e.get("timestamp", 0)
+                if sid:
+                    msg_count[sid] += 1
+                    if ts &gt; last_used[sid]:
+                        last_used[sid] = ts
+            except Exception:
+                pass
+
+# PID map from session files.
+pid_map = {}
+if os.path.isdir(SESSIONS_DIR):
+    for f in glob.glob(SESSIONS_DIR + "/*.json"):
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            pid = os.path.basename(f).replace(".json", "")
+            pid_map[d.get("sessionId", "")] = pid
+        except Exception:
+            pass
+
+def fmt_ts(ts):
+    if not ts:
+        return "-"
+    return datetime.datetime.fromtimestamp(ts / 1000).strftime("%d-%m-%Y %H:%M")
+
+def is_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+def build_table(project_sessions):
+    lines = [
+        "## Registered Sessions",
+        "",
+        "&gt; Auto-synced on every `ccs add`, `ccs rename`, `ccs remove`, and `ccs sync`.",
+        "",
+        "| Name | PID | Status | Created | Last Used | Msgs | Description |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    if project_sessions:
+        for name, info in project_sessions.items():
+            sid     = info.get("id", "")
+            pid     = info.get("pid") or pid_map.get(sid, "-")
+            created = info.get("created_at", "-")
+            desc    = info.get("description", "-")
+            lu      = fmt_ts(last_used.get(sid, 0))
+            msgs    = str(msg_count.get(sid, 0))
+            alive   = "● live" if pid != "-" and is_alive(pid) else "○ idle"
+            lines.append(f"| `{name}` | {pid} | {alive} | {created} | {lu} | {msgs} | {desc} |")
+    else:
+        lines.append("| — | — | — | — | — | — | No sessions registered for this project yet |")
+    return "\n".join(lines)
+
+# Rewrite each project's md file.
+for project_path, sessions in by_project.items():
+    md_file = os.path.join(project_path, ".claude", "claude-sessions-registry.md")
+    if not os.path.exists(md_file):
+        continue
+    new_table = build_table(sessions)
+    with open(md_file) as f:
+        content = f.read()
+    updated = re.sub(
+        r"## Registered Sessions.*?(?=\n---)",
+        new_table,
+        content,
+        flags=re.DOTALL,
+    )
+    with open(md_file, "w") as f:
+        f.write(updated)
+    print(f"Synced {project_path} ({len(sessions)} session(s))")
+PYEOF
+}
+
+cmd="$1"
+
+case "$cmd" in
+
+  list)
+    python3 &lt;&lt; 'PYEOF'
+import json, os, glob, collections, datetime
+
+REGISTRY     = os.path.expanduser("~/.claude/named-sessions.json")
+SESSIONS_DIR = os.path.expanduser("~/.claude/sessions")
+HISTORY      = os.path.expanduser("~/.claude/history.jsonl")
+
+with open(REGISTRY) as f:
+    data = json.load(f)
+sessions = data.get("sessions", {})
+
+last_used = collections.defaultdict(int)
+msg_count = collections.defaultdict(int)
+if os.path.exists(HISTORY):
+    with open(HISTORY) as f:
+        for line in f:
+            try:
+                e = json.loads(line.strip())
+                sid = e.get("sessionId", "")
+                ts  = e.get("timestamp", 0)
+                if sid:
+                    msg_count[sid] += 1
+                    if ts &gt; last_used[sid]:
+                        last_used[sid] = ts
+            except Exception:
+                pass
+
+pid_map = {}
+if os.path.isdir(SESSIONS_DIR):
+    for f in glob.glob(SESSIONS_DIR + "/*.json"):
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            pid = os.path.basename(f).replace(".json", "")
+            pid_map[d.get("sessionId", "")] = pid
+        except Exception:
+            pass
+
+def is_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+def fmt_ts(ts):
+    if not ts:
+        return "-"
+    return datetime.datetime.fromtimestamp(ts / 1000).strftime("%d-%m-%Y %H:%M")
+
+if not sessions:
+    print("No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;")
+else:
+    print()
+    hdr = ("NAME".ljust(28) + "STATUS".ljust(8) + "PID".ljust(7) +
+           "CREATED".ljust(13) + "LAST USED".ljust(17) + "MSGS".ljust(6) + "PROJECT")
+    print("  " + hdr)
+    print("  " + "-" * 105)
+    for name, info in sessions.items():
+        sid     = info.get("id", "")
+        pid     = info.get("pid") or pid_map.get(sid, "-")
+        alive   = "● live" if pid != "-" and is_alive(pid) else "○ idle"
+        created = info.get("created_at", "-")
+        lu      = fmt_ts(last_used.get(sid, 0))
+        msgs    = str(msg_count.get(sid, 0))
+        proj    = info.get("project", "")[:25]
+        print("  " + name.ljust(28) + alive.ljust(8) + pid.ljust(7) +
+              created.ljust(13) + lu.ljust(17) + msgs.ljust(6) + proj)
+    print()
+PYEOF
+    ;;
+
+  open)
+    name="$2"
+    if [ -z "$name" ]; then echo "Usage: ccs open &lt;name&gt;"; exit 1; fi
+    sid=$(python3 -c "
+import json, os
+with open(os.path.expanduser('$REGISTRY')) as f:
+    data = json.load(f)
+s = data.get('sessions', {}).get('$name')
+print(s['id'] if s else 'NOT_FOUND')
+")
+    if [ "$sid" = "NOT_FOUND" ]; then
+      echo "Session '$name' not found. Run 'ccs list' to see available sessions."
+      exit 1
+    fi
+    echo "Resuming: $name"
+    claude --resume "$sid"
+    ;;
+
+  add)
+    name="$2"
+    arg3="$3"
+    desc="${4:-}"
+    if [ -z "$name" ] || [ -z "$arg3" ]; then
+      echo "Usage:"
+      echo "  ccs add &lt;name&gt; &lt;pid&gt;              register by PID (shown in statusline)"
+      echo "  ccs add &lt;name&gt; &lt;session-id&gt;       register by full session ID"
+      echo "  ccs add &lt;name&gt; &lt;pid&gt; \"&lt;desc&gt;\"     register with a description"
+      exit 1
+    fi
+    # Resolve cwd/project info first so we can auto-create the project md.
+    project_path=$(python3 &lt;&lt; PYEOF
+import json, os
+SESSIONS_DIR = os.path.expanduser("$SESSIONS_DIR")
+arg3 = "$arg3"
+if arg3.isdigit() and len(arg3) &lt;= 6:
+    pid_file = os.path.join(SESSIONS_DIR, arg3 + ".json")
+    if os.path.exists(pid_file):
+        try:
+            with open(pid_file) as f:
+                d = json.load(f)
+            print(d.get("cwd", ""))
+        except Exception:
+            print("")
+PYEOF
+)
+    ensure_project_md "$project_path"
+
+    python3 &lt;&lt; PYEOF
+import json, os, datetime
+
+REGISTRY     = os.path.expanduser("$REGISTRY")
+SESSIONS_DIR = os.path.expanduser("$SESSIONS_DIR")
+HISTORY      = os.path.expanduser("$HISTORY")
+name  = "$name"
+arg3  = "$arg3"
+desc  = """$desc"""
+
+sid          = arg3
+project_path = ""
+project_name = ""
+pid_str      = ""
+
+if arg3.isdigit() and len(arg3) &lt;= 6:
+    pid_file = os.path.join(SESSIONS_DIR, arg3 + ".json")
+    if os.path.exists(pid_file):
+        with open(pid_file) as f:
+            d = json.load(f)
+        sid          = d.get("sessionId", arg3)
+        project_path = d.get("cwd", "")
+        project_name = os.path.basename(project_path.rstrip("/"))
+        pid_str      = arg3
+        print(f"Resolved PID {arg3} -&gt; session {sid[:8]}... ({project_name})")
+    else:
+        print(f"No session file for PID {arg3}. Try: ccs add &lt;name&gt; &lt;full-session-id&gt;")
+        raise SystemExit(1)
+
+# Auto-description from first history message if none provided.
+if not desc and os.path.exists(HISTORY):
+    try:
+        with open(HISTORY) as f:
+            for line in f:
+                try:
+                    e = json.loads(line.strip())
+                    if e.get("sessionId") == sid and e.get("display"):
+                        desc = e["display"][:80].strip()
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass
+if not desc:
+    desc = "Added " + datetime.date.today().strftime("%d-%m-%Y")
+
+with open(REGISTRY) as f:
+    data = json.load(f)
+data.setdefault("sessions", {})[name] = {
+    "id":           sid,
+    "description":  desc,
+    "project":      project_name,
+    "project_path": project_path,
+    "pid":          pid_str,
+    "created_at":   datetime.date.today().strftime("%d-%m-%Y"),
+}
+with open(REGISTRY, "w") as f:
+    json.dump(data, f, indent=2)
+print("Registered: " + name + " -&gt; " + sid[:12] + "...")
+PYEOF
+    sync_md
+    ;;
+
+  update)
+    name="$2"
+    desc="$3"
+    if [ -z "$name" ] || [ -z "$desc" ]; then
+      echo "Usage: ccs update &lt;name&gt; \"&lt;new description&gt;\""
+      exit 1
+    fi
+    python3 -c "
+import json, os
+p = os.path.expanduser('$REGISTRY')
+with open(p) as f:
+    data = json.load(f)
+if '$name' in data.get('sessions', {}):
+    data['sessions']['$name']['description'] = '$desc'
+    with open(p, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('Updated: $name')
+else:
+    print('Not found: $name')
+"
+    sync_md
+    ;;
+
+  remove)
+    name="$2"
+    if [ -z "$name" ]; then echo "Usage: ccs remove &lt;name&gt;"; exit 1; fi
+    python3 -c "
+import json, os
+p = os.path.expanduser('$REGISTRY')
+with open(p) as f:
+    data = json.load(f)
+if '$name' in data.get('sessions', {}):
+    del data['sessions']['$name']
+    with open(p, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('Removed: $name')
+else:
+    print('Not found: $name')
+"
+    sync_md
+    ;;
+
+  rename)
+    old="$2"; new="$3"
+    if [ -z "$old" ] || [ -z "$new" ]; then echo "Usage: ccs rename &lt;old&gt; &lt;new&gt;"; exit 1; fi
+    python3 -c "
+import json, os
+p = os.path.expanduser('$REGISTRY')
+with open(p) as f:
+    data = json.load(f)
+sessions = data.get('sessions', {})
+if '$old' in sessions:
+    sessions['$new'] = sessions.pop('$old')
+    with open(p, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('Renamed: $old -&gt; $new')
+else:
+    print('Not found: $old')
+"
+    sync_md
+    ;;
+
+  sync)
+    sync_md
+    ;;
+
+  pids)
+    python3 &lt;&lt; 'PYEOF'
+import json, os, glob
+
+SESSIONS_DIR = os.path.expanduser("~/.claude/sessions")
+print()
+print("  " + "PID".ljust(8) + "STATUS".ljust(8) + "SESSION ID".ljust(38) + "PROJECT")
+print("  " + "-" * 80)
+if os.path.isdir(SESSIONS_DIR):
+    files = sorted(glob.glob(SESSIONS_DIR + "/*.json"), key=os.path.getmtime, reverse=True)
+    for f in files:
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            pid  = os.path.basename(f).replace(".json", "")
+            sid  = d.get("sessionId", "")
+            proj = d.get("cwd", "").split("/")[-1][:25]
+            try:
+                os.kill(int(pid), 0)
+                alive = "● live"
+            except Exception:
+                alive = "○ dead"
+            print("  " + pid.ljust(8) + alive.ljust(8) + sid.ljust(38) + proj)
+        except Exception:
+            pass
+print()
+print("  Register: ccs add &lt;name&gt; &lt;pid&gt;")
+PYEOF
+    ;;
+
+  sessions)
+    python3 &lt;&lt; 'PYEOF'
+import json, collections, datetime, os
+
+HISTORY = os.path.expanduser("~/.claude/history.jsonl")
+sessions = collections.OrderedDict()
+if os.path.exists(HISTORY):
+    with open(HISTORY) as f:
+        for line in f:
+            try:
+                entry = json.loads(line.strip())
+                sid = entry.get("sessionId")
+                if sid and sid not in sessions:
+                    sessions[sid] = entry
+            except Exception:
+                pass
+
+sorted_s = sorted(sessions.values(), key=lambda x: x.get("timestamp", 0), reverse=True)[:30]
+print()
+print("  " + "#".ljust(4) + "DATE".ljust(17) + "SESSION ID".ljust(38) + "PROJECT".ljust(22) + "FIRST MESSAGE")
+print("  " + "-" * 120)
+for i, s in enumerate(sorted_s, 1):
+    ts   = datetime.datetime.fromtimestamp(s.get("timestamp", 0) / 1000).strftime("%d-%m-%Y %H:%M")
+    sid  = s.get("sessionId", "")
+    proj = s.get("project", "").split("/")[-1][:20]
+    msg  = s.get("display", "")[:50]
+    print("  " + str(i).ljust(4) + ts.ljust(17) + sid.ljust(38) + proj.ljust(22) + msg)
+print()
+print("  Register: ccs add &lt;name&gt; &lt;session-id&gt;")
+PYEOF
+    ;;
+
+  *)
+    echo ""
+    echo "  ccs list                       All named sessions with live stats"
+    echo "  ccs open &lt;name&gt;                Resume a session by name"
+    echo "  ccs add &lt;name&gt; &lt;pid&gt;           Register by PID (shown in statusline)"
+    echo "  ccs add &lt;name&gt; &lt;pid&gt; \"&lt;desc&gt;\"  Register with a custom description"
+    echo "  ccs update &lt;name&gt; \"&lt;desc&gt;\"     Update description of a session"
+    echo "  ccs remove &lt;name&gt;              Remove from registry"
+    echo "  ccs rename &lt;old&gt; &lt;new&gt;         Rename a session"
+    echo "  ccs sync                       Force-rebuild all project registry tables"
+    echo "  ccs pids                       Show all running Claude PIDs"
+    echo "  ccs sessions                   Browse recent sessions from history"
+    echo ""
+    ;;
+esac</pre>
+</div>
+
+<h3>Manual install (if you prefer not to use the prompt above)</h3>
+<div class="copy-wrap">
+<button class="copy-btn" data-target="ccs-install">Copy install commands</button>
+<pre id="ccs-install">mkdir -p ~/.local/bin ~/.claude
+
+# Paste the ccs script above into ~/.local/bin/ccs using your editor, then:
+chmod +x ~/.local/bin/ccs
+
+# Ensure PATH includes ~/.local/bin (zsh shown — use ~/.bashrc for bash)
+grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' &gt;&gt; ~/.zshrc
+source ~/.zshrc
+
+# Initialise an empty registry (safe to re-run)
+[ -f ~/.claude/named-sessions.json ] || echo '{"sessions": {}}' &gt; ~/.claude/named-sessions.json
+
+# Smoke test
+ccs list   # should print "No sessions registered. Use: ccs add &lt;name&gt; &lt;pid&gt;"</pre>
+</div>
+
+<h2 id="registry">4. The per-project registry — auto-created, no manual step</h2>
+<p>The first time you run <code>ccs add</code> in a project, <code>ccs</code> creates <code>&lt;project&gt;/.claude/claude-sessions-registry.md</code> automatically using the template embedded in the script. After that, every <code>ccs add</code>, <code>ccs remove</code>, <code>ccs rename</code>, and <code>ccs sync</code> rewrites the table inside it. You don't copy a template by hand.</p>
+
+<p>For reference, this is what gets written:</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="registry-template">Copy template (reference only)</button>
+<pre id="registry-template"># Claude Code Sessions Registry
+
+Name, list, and resume Claude Code sessions for this project without using `/resume`.
+Global registry file: `~/.claude/named-sessions.json`
+
+---
+
+## Registered Sessions
+
+&gt; Auto-synced on every `ccs add`, `ccs rename`, `ccs remove`, and `ccs sync`.
+
+| Name | PID | Status | Created | Last Used | Msgs | Description |
+|---|---|---|---|---|---|---|
+| — | — | — | — | — | — | No sessions registered for this project yet |
+---
+
+## Quick Reference
+
+| Command | What it does |
+|---|---|
+| `ccs list` | Show all named sessions with live/idle status, created date, last used, message count |
+| `ccs pids` | Show all running Claude processes with PIDs |
+| `ccs open <name>` | Resume a session by name (run outside Claude Code) |
+| `ccs add <name> <pid>` | Register a session using its PID (shown in the statusline) |
+| `ccs add <name> <pid> "<desc>"` | Register with a custom description |
+| `ccs update <name> "<desc>"` | Update description of an existing session |
+| `ccs rename <old> <new>` | Rename a session |
+| `ccs remove <name>` | Delete a session from the registry |
+| `ccs sync` | Force-rebuild every project's registry table from the global JSON |
+| `ccs sessions` | Browse last 30 sessions from history |
+
+---
+
+## Notes
+
+1. `ccs open` must be run **outside** an active Claude Code session.
+2. All other commands work both in terminal and inside Claude Code via `!`.
+3. `○ idle` means the terminal process ended but the session is still resumable.
+4. Session names are case-sensitive. Use lowercase kebab-case.
+5. The Registered Sessions table is auto-maintained — never edit it manually. Run `ccs sync` if it looks stale.
+6. Description is auto-populated from the session's first message if not provided.</pre>
+</div>
+
+<h2 id="usage">5. Daily usage</h2>
+<div class="card">
+<h3>Register a session</h3>
+<p>Look at the statusline of the Claude Code window you want to register. It typically shows the project name and a PID, for example <code>my-project  pid:54057</code>. From any terminal:</p>
+<pre>ccs add my-session 54057
+ccs add my-session 54057 "Working on the auth refactor"</pre>
+<p>Or from inside Claude Code itself, prefix with <code>!</code>:</p>
+<pre>! ccs add my-session 54057</pre>
+
+<h3>List, browse, resume</h3>
+<pre>ccs list                    # all named sessions, live status, last used, message count
+ccs pids                    # all currently running Claude PIDs
+ccs sessions                # last 30 sessions from history (named or not)
+ccs open my-session         # resume by name (run in a fresh terminal, outside Claude Code)</pre>
+
+<h3>Maintain</h3>
+<pre>ccs rename old-name new-name
+ccs update my-session "Updated description"
+ccs remove my-session
+ccs sync                    # rewrite every project's registry table from the JSON</pre>
+</div>
+
+<h2 id="verify">6. Verification checklist</h2>
+<ul>
+  <li><span class="good">✓</span> <code>which ccs</code> resolves to <code>~/.local/bin/ccs</code>.</li>
+  <li><span class="good">✓</span> <code>ccs</code> (no args) prints the help block.</li>
+  <li><span class="good">✓</span> <code>ccs list</code> prints "No sessions registered" on a fresh install.</li>
+  <li><span class="good">✓</span> Start a Claude Code session in any project, note its PID from the statusline, then run <code>ccs add test 12345</code> (substitute the PID). It prints "Resolved PID … -&gt; session …" and "Registered: test".</li>
+  <li><span class="good">✓</span> <code>cat &lt;that-project&gt;/.claude/claude-sessions-registry.md</code> exists and shows a row for <code>test</code>.</li>
+  <li><span class="good">✓</span> <code>ccs remove test</code> removes the row on next sync.</li>
+</ul>
+
+<hr>
+<p class="sub">A single-file, no-dependency bootstrap for the <code>ccs</code> Claude Code session manager. Share freely.</p>
+
+</div>
+
+<script>
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.getAttribute('data-target');
+    const el = document.getElementById(id);
+    if (!el) return;
+    const text = el.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    }
+  });
+});
+</script>
+</body>
+</html>
