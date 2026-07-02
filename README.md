@@ -55,6 +55,20 @@ The first time you run `ccs add` in a project, `ccs` auto-creates `<project>/.cl
 
 You can commit that file to your project's repo if you want your team to see what sessions you maintain — there's nothing sensitive in it (no tokens, no transcripts).
 
+## Keep sessions from being auto-deleted
+
+Claude Code deletes local session transcripts after a retention period: `cleanupPeriodDays` in `~/.claude/settings.json`, default 30 days. Once a transcript is deleted, `ccs open` has nothing to resume - the name stays in your registry, but the session is gone for good.
+
+Extend the retention by merging this key into `~/.claude/settings.json` (don't replace existing keys):
+
+```json
+{
+  "cleanupPeriodDays": 3650
+}
+```
+
+3650 days is ~10 years - set any number you like. The bootstrap prompt in the HTML sets this for you automatically; if you installed manually, add it yourself.
+
 ## Requirements
 
 - macOS or Linux

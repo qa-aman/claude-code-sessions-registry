@@ -112,7 +112,7 @@ CONTEXT — what gets installed
 - ~/.local/bin/ccs                    the CLI (bash + embedded python3)
 - ~/.claude/named-sessions.json       the global registry
 - ~/.claude/statusline-ccs.sh         the statusline (shows project + PID)
-- ~/.claude/settings.json             gets a `statusLine` key merged in
+- ~/.claude/settings.json             gets `statusLine` + `cleanupPeriodDays` merged in
 - shell rc (~/.zshrc or ~/.bashrc)    one PATH export added if missing
 
 No network calls, no secrets, no external services after install.
@@ -146,7 +146,10 @@ STEPS
    ~/.claude/statusline-ccs.sh, then:
      chmod +x ~/.claude/statusline-ccs.sh
 
-6. MERGE THE STATUSLINE INTO settings.json (non-destructive)
+6. MERGE STATUSLINE + SESSION RETENTION INTO settings.json (non-destructive)
+   Two keys get merged here. `statusLine` powers the PID display. `cleanupPeriodDays`
+   stops Claude Code from auto-deleting session transcripts after the default
+   30 days — without it, `ccs open` eventually has nothing to resume.
    Run this exact python3 snippet (remember: the &lt;&lt; below is HTML-encoded as
    `&amp;lt;&amp;lt;` in the source — decode it to `&lt;&lt;` before pasting to bash):
 
@@ -159,6 +162,7 @@ STEPS
            except Exception:
                print("settings.json exists but is invalid JSON. Aborting merge — fix it manually.")
                raise SystemExit(1)
+       changed = False
        existing = data.get("statusLine")
        target = {"type": "command", "command": "bash ~/.claude/statusline-ccs.sh"}
        if existing == target:
@@ -168,9 +172,17 @@ STEPS
            print("Leaving it untouched. To switch, edit ~/.claude/settings.json by hand.")
        else:
            data["statusLine"] = target
+           changed = True
+           print("Added ccs statusline to ~/.claude/settings.json")
+       if "cleanupPeriodDays" in data:
+           print("cleanupPeriodDays already set:", data["cleanupPeriodDays"], "— leaving it untouched.")
+       else:
+           data["cleanupPeriodDays"] = 3650
+           changed = True
+           print("Set cleanupPeriodDays=3650 — session transcripts kept ~10 years instead of 30 days.")
+       if changed:
            p.parent.mkdir(parents=True, exist_ok=True)
            p.write_text(json.dumps(data, indent=2))
-           print("Added ccs statusline to ~/.claude/settings.json")
        PY
 
    Tell the user: a Claude Code RESTART is required for the new statusline
@@ -204,6 +216,8 @@ STEPS
 
      ✓ ccs is installed.
      ✓ Statusline is configured.
+     ✓ Session retention extended (cleanupPeriodDays: 3650) — Claude Code
+       won't auto-delete your sessions after the default 30 days.
      → RESTART CLAUDE CODE so the statusline shows up.
 
      After restart, the bottom of your Claude Code window will show:
@@ -857,6 +871,39 @@ PY</pre>
 
 <p>The number after <code>pid:</code> is what <code>ccs add</code> wants.</p>
 
+<h3>Stop Claude Code from auto-deleting your sessions</h3>
+<p><strong>Important:</strong> Claude Code deletes local session transcripts after a retention period — <code>cleanupPeriodDays</code> in <code>~/.claude/settings.json</code>, default <strong>30 days</strong>. Once a transcript is deleted, <code>ccs open</code> can no longer resume that session: the name stays in your registry, but there is nothing left to resume. Extend the retention in the same <code>settings.json</code>:</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="cleanup-settings">Copy settings snippet</button>
+<pre id="cleanup-settings">{
+  "cleanupPeriodDays": 3650
+}</pre>
+</div>
+
+<p>3650 days is ~10 years — set any number you like. One-liner that merges the key safely (preserves existing keys, skips if already set):</p>
+
+<div class="copy-wrap">
+<button class="copy-btn" data-target="cleanup-merge">Copy merge command</button>
+<pre id="cleanup-merge">python3 - &lt;&lt;'PY'
+import json, os, pathlib
+p = pathlib.Path(os.path.expanduser("~/.claude/settings.json"))
+data = {}
+if p.exists():
+    try: data = json.loads(p.read_text())
+    except Exception: data = {}
+if "cleanupPeriodDays" in data:
+    print("cleanupPeriodDays already set:", data["cleanupPeriodDays"])
+else:
+    data["cleanupPeriodDays"] = 3650
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2))
+    print("Set cleanupPeriodDays to 3650 in ~/.claude/settings.json")
+PY</pre>
+</div>
+
+<p>The bootstrap prompt in Section 2 sets this automatically (step 6) — this subsection is for manual installs, or for checking an existing setup.</p>
+
 <h2 id="first-session">5. Add your first session (sample prompt)</h2>
 <p>Once the statusline is showing a PID, you have everything you need. Here are two ways to register your first session — pick whichever feels natural.</p>
 
@@ -1072,6 +1119,11 @@ PY
   <td>Re-register using the PID from the statusline. The session ID path is a fallback for when the PID's session file is missing.</td>
 </tr>
 <tr>
+  <td><code>ccs open</code> can't resume an older session (name is in the registry, but nothing comes back)</td>
+  <td>Claude Code auto-deleted the transcript — default retention is 30 days (<code>cleanupPeriodDays</code>).</td>
+  <td>Set <code>"cleanupPeriodDays": 3650</code> in <code>~/.claude/settings.json</code> (see Section 4). Already-deleted sessions cannot be recovered — set this early.</td>
+</tr>
+<tr>
   <td>Step 6 says "settings.json is invalid JSON"</td>
   <td>The file is malformed.</td>
   <td>Open it in an editor and fix the syntax (or move it aside as <code>settings.json.bak</code>), then re-run the bootstrap.</td>
@@ -1088,6 +1140,7 @@ PY
   <li><span class="good">✓</span> Note that PID, then run <code>ccs add test &lt;pid&gt;</code> from another terminal. It prints "Resolved PID … -&gt; session …" and "Registered: test".</li>
   <li><span class="good">✓</span> <code>cat &lt;that-project&gt;/.claude/claude-sessions-registry.md</code> exists and shows a row for <code>test</code>.</li>
   <li><span class="good">✓</span> <code>ccs remove test</code> removes the row on next sync.</li>
+  <li><span class="good">✓</span> <code>grep cleanupPeriodDays ~/.claude/settings.json</code> shows <code>3650</code> (or your chosen retention) — without it, Claude Code deletes session transcripts after 30 days and named sessions become unresumable.</li>
 </ul>
 
 <hr>
