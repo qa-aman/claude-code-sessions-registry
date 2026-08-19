@@ -63,11 +63,11 @@ Extend the retention by merging this key into `~/.claude/settings.json` (don't r
 
 ```json
 {
-  "cleanupPeriodDays": 3650
+  "cleanupPeriodDays": 365
 }
 ```
 
-3650 days is ~10 years - set any number you like. The bootstrap prompt in the HTML sets this for you automatically; if you installed manually, add it yourself.
+365 days is ~1 year - set any number you like. The bootstrap prompt in the HTML sets this for you automatically; if you installed manually, add it yourself.
 
 ## Requirements
 
